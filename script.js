@@ -3,6 +3,12 @@
 document.addEventListener('DOMContentLoaded', () => {
     const gameArea = document.querySelector('.cyberpunk-bg');
     const platformContainer = document.getElementById('platform-container');
+    const startScreen = document.getElementById('startScreen');
+    const startButton = document.getElementById('startButton');
+
+    // Game state
+    let gameStarted = false;
+    let gameLoopId = null;
 
     // Add rain container
     const rainContainer = document.createElement('div');
@@ -290,6 +296,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function gameLoop() {
+        if (!gameStarted) return;
+
         // 1. Handle Horizontal Movement & Camera
         if (playerIsAlive) { // Only allow movement if alive
             const oldPlayerWorldX = playerWorldX;
@@ -484,7 +492,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateBubblePosition();
         }
 
-        requestAnimationFrame(gameLoop);
+        gameLoopId = requestAnimationFrame(gameLoop);
     }
 
     let previousPlatformHadEnemy = false; // This needs to be accessible by generateMoreContent
@@ -533,13 +541,20 @@ document.addEventListener('DOMContentLoaded', () => {
         lastGeneratedLevel = lastFixedPlatform.level;
     }
 
-    // Ensure setPlayerInitialPosition is called after platforms are created
+    // Initialize the game world but don't start the loop
     generateInitialPlatforms();
-    setPlayerInitialPosition(); 
-    gameLoop(); // Start the game loop!
+    setPlayerInitialPosition();
 
-    // Event Listeners for key presses
+    // Start button click handler
+    startButton.addEventListener('click', () => {
+        gameStarted = true;
+        startScreen.style.display = 'none';
+        gameLoop(); // Start the game loop
+    });
+
+    // Modify event listeners to check gameStarted
     window.addEventListener('keydown', (e) => {
+        if (!gameStarted) return;
         if (keys.hasOwnProperty(e.code)) {
             keys[e.code] = true;
         }
@@ -549,6 +564,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     window.addEventListener('keyup', (e) => {
+        if (!gameStarted) return;
         if (keys.hasOwnProperty(e.code)) {
             keys[e.code] = false;
         }
@@ -715,45 +731,55 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function restartGame() {
         console.log("Restarting game...");
-        // 1. Reset Player State
+        
+        // Stop the game loop
+        if (gameLoopId) {
+            cancelAnimationFrame(gameLoopId);
+            gameLoopId = null;
+        }
+        
+        // Reset game state
+        gameStarted = false;
         playerIsAlive = true;
-        playerWorldX = 50; // Or use setPlayerInitialPosition which depends on platforms
+        playerWorldX = 50;
         playerY = 0;
         velocityY = 0;
         isJumping = false;
         isAttacking = false;
         canAttack = true;
         playerDirection = 'right';
-        player.style.backgroundColor = '#ffd700'; // Reset color
+        player.style.backgroundColor = '#ffd700';
         currentPlatformId = null;
 
-        // 2. Reset Camera
+        // Reset camera
         cameraOffsetX = 0;
 
-        // 3. Clear existing dynamic elements (platforms, enemies)
+        // Clear existing elements
         platforms.forEach(p => { if (p.element) p.element.remove(); });
         enemies.forEach(e => { if (e.element) e.element.remove(); });
         platforms = [];
         enemies = [];
 
-        // 4. Reset generation state
+        // Reset generation state
         currentX = 0;
         previousPlatformHadEnemy = false;
         lastGeneratedLevel = 0;
 
-        // 5. Regenerate initial world and set player position
-        generateInitialPlatforms(); // This will also call updateVisualPosition for new elements
-        setPlayerInitialPosition(); // This calls updatePlayerVisualPosition
+        // Regenerate world
+        generateInitialPlatforms();
+        setPlayerInitialPosition();
         
-        // Ensure all visuals are updated after reset
+        // Update visuals
         platforms.forEach(updatePlatformVisualPosition);
         enemies.forEach(updateEnemyVisualPosition);
         updatePlayerVisualPosition();
         const buildingsElement = document.querySelector('.buildings');
         if (buildingsElement) buildingsElement.style.left = '0px';
 
-        // Game loop is already running, it will pick up the new state
-        console.log("Game Restarted!");
+        // Show start screen
+        startScreen.style.display = 'flex';
+        
+        console.log("Game Ready to Restart!");
     }
 
     function updatePowerUpIndicator() {
