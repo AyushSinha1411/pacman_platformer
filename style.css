@@ -475,3 +475,24 @@ body, html {
         text-shadow: 0 0 20px #4fc3dc, 0 0 30px #4fc3dc, 0 0 40px #4fc3dc;
     }
 }
+
+#score-display {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    padding: 10px 20px;
+    background: rgba(0, 0, 0, 0.7);
+    border: 2px solid #4fc3dc;
+    color: #4fc3dc;
+    font-family: 'Arial', sans-serif;
+    border-radius: 5px;
+    z-index: 100;
+    text-shadow: 0 0 5px #4fc3dc;
+}
+
+.start-screen .high-score {
+    font-size: 24px;
+    margin-bottom: 20px;
+    color: #ffd700;
+    text-shadow: 0 0 10px #ffd700;
+}
