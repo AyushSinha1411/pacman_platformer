@@ -5,10 +5,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const platformContainer = document.getElementById('platform-container');
     const startScreen = document.getElementById('startScreen');
     const startButton = document.getElementById('startButton');
+    const scoreDisplay = document.getElementById('score-display');
+    const highScoreDisplay = document.getElementById('highScore');
 
     // Game state
     let gameStarted = false;
     let gameLoopId = null;
+    let score = 0;
+    let highScore = localStorage.getItem('highScore') || 0;
+    
+    // Update high score display
+    highScoreDisplay.textContent = `High Score: ${highScore}`;
+
+    function updateScore(points) {
+        score += points;
+        scoreDisplay.textContent = `Score: ${score}`;
+    }
+
+    function checkHighScore() {
+        if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('highScore', highScore);
+            highScoreDisplay.textContent = `High Score: ${highScore}`;
+        }
+    }
 
     // Add rain container
     const rainContainer = document.createElement('div');
@@ -225,7 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const newPlatformY = platformLevelsY[nextRandomLevel];
-            const newPlatform = createPlatformElement(currentX, newPlatformY, platformWidth, 'random-platform');
+            const newPlatform = createPlatformElement(currentX, newPlatformY, platformWidth, 'dynamic-platform');
             platforms.push(newPlatform);
 
             // Enemy spawning for random platforms with the new rule
@@ -332,10 +352,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // 3. Apply Physics (Gravity) - this applies even if player is not alive
-        console.log(`Loop Top - playerY: ${playerY.toFixed(2)}, velocityY: ${velocityY.toFixed(2)}, isJumping: ${isJumping}`); // LOGGING
+        console.log(`Loop Top - playerY: ${playerY.toFixed(2)}, velocityY: ${velocityY.toFixed(2)}, isJumping: ${isJumping}`);
         playerY += velocityY;
         if (playerIsAlive) {
             velocityY += gravity;
+            
+            // Check for fall death
+            const fallDeathThreshold = gameHeight + 100; // Give some buffer below screen
+            if (playerY > fallDeathThreshold) {
+                console.log("Player fell to death!");
+                handlePlayerDeath();
+                return; // Skip rest of game loop for this frame
+            }
         } else {
             velocityY += gravity * deathFallGravityFactor; // Slower fall when dead
         }
@@ -355,13 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             });
-            if (playerY + playerHeight > gameHeight && velocityY >= 0) { // Check velocityY to ensure it's not from the knockback up
-                playerY = gameHeight - playerHeight;
-                velocityY = 0;
-                isJumping = false;
-                onPlatformThisFrame = true;
-                newCurrentPlatformId = 'ground';
-            }
+            
             currentPlatformId = newCurrentPlatformId;
             isJumping = !onPlatformThisFrame;
         } else {
@@ -479,14 +501,6 @@ document.addEventListener('DOMContentLoaded', () => {
             checkEnemyCollision(); 
         }
 
-        // Check for game restart condition if player is dead and off-screen
-        if (!playerIsAlive && (playerY > gameHeight + playerHeight * 2)) { // playerY is top, check if fully off bottom
-            restartGame();
-            // No need to requestAnimationFrame here as restartGame might re-initialize things that gameLoop depends on.
-            // The gameLoop() call at the end of restartGame() or its own initialization will pick it up if needed.
-            // Or, more simply, the gameLoop just continues after restartGame reinitializes state.
-        }
-
         // Update bubble position if active
         if (isBubbleActive) {
             updateBubblePosition();
@@ -549,7 +563,9 @@ document.addEventListener('DOMContentLoaded', () => {
     startButton.addEventListener('click', () => {
         gameStarted = true;
         startScreen.style.display = 'none';
-        gameLoop(); // Start the game loop
+        score = 0; // Reset score when starting new game
+        scoreDisplay.textContent = 'Score: 0';
+        gameLoop();
     });
 
     // Modify event listeners to check gameStarted
@@ -581,8 +597,7 @@ document.addEventListener('DOMContentLoaded', () => {
         canAttack = false; // Start cooldown
         player.classList.add('is-firing'); // Re-enable mouth opening animation
 
-        console.log(Date.now(), 'Fire Projectile (Mouth anim ENABLED)'); // Updated log
-        // console.log(`Before Fire - playerY: ${playerY.toFixed(2)}, velocityY: ${velocityY.toFixed(2)}`); // LOGGING - Can be removed if dip is fixed or kept for now
+        console.log(Date.now(), 'Fire Projectile (Mouth anim ENABLED)');
 
         // Determine projectile start position and direction
         let projStartX = playerWorldX + (playerWidth / 2) - (projectileWidth / 2);
@@ -596,13 +611,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         createProjectile(projStartX, projStartY, projDirectionX);
-        
-        // console.log(`After Fire - playerY: ${playerY.toFixed(2)}, velocityY: ${velocityY.toFixed(2)}`); // LOGGING - Can be removed if dip is fixed or kept for now
 
         const firingAnimationDuration = 100; 
         setTimeout(() => { 
-            player.classList.remove('is-firing'); // Re-enable mouth closing after firing animation
-            // console.log(Date.now(), 'Firing animation ended / Mouth Closed');
+            player.classList.remove('is-firing');
         }, firingAnimationDuration);
 
         const attackCooldown = 400; 
@@ -714,19 +726,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- End Enemy Logic Section ---
 
     function handlePlayerDeath() {
-        if (!playerIsAlive) return;
+        if (!playerIsAlive) return; // Already dead, prevent multiple calls
         playerIsAlive = false;
         
-        player.style.backgroundColor = '#555'; // Indicate death visually
-        player.classList.add('mouth-closed'); // Close mouth on death
-        // player.style.transform = 'rotate(180deg)'; // Optional: flip Pac-Man on death
+        player.style.backgroundColor = '#555';
+        player.classList.add('mouth-closed');
 
-        // Apply a small upward knockback, then let gravity take over
-        velocityY = -jumpStrength / 2; // A little hop up
-        isJumping = true; // To ensure gravity affects him fully
+        // Apply death jump
+        velocityY = -jumpStrength / 2;
+        isJumping = true;
 
         console.log("GAME OVER - Pac-Man is falling...");
-        // No longer using setTimeout here for restart; gameLoop will handle it.
+        
+        // Check for high score
+        checkHighScore();
+        
+        // Automatically restart after a delay
+        setTimeout(() => {
+            restartGame();
+        }, 2000);
     }
 
     function restartGame() {
@@ -738,7 +756,7 @@ document.addEventListener('DOMContentLoaded', () => {
             gameLoopId = null;
         }
         
-        // Reset game state
+        // Reset all game state
         gameStarted = false;
         playerIsAlive = true;
         playerWorldX = 50;
@@ -750,6 +768,8 @@ document.addEventListener('DOMContentLoaded', () => {
         playerDirection = 'right';
         player.style.backgroundColor = '#ffd700';
         currentPlatformId = null;
+        score = 0;
+        scoreDisplay.textContent = 'Score: 0';
 
         // Reset camera
         cameraOffsetX = 0;
@@ -757,8 +777,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear existing elements
         platforms.forEach(p => { if (p.element) p.element.remove(); });
         enemies.forEach(e => { if (e.element) e.element.remove(); });
+        projectiles.forEach(p => { if (p.element) p.element.remove(); });
         platforms = [];
         enemies = [];
+        projectiles = [];
 
         // Reset generation state
         currentX = 0;
@@ -779,7 +801,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Show start screen
         startScreen.style.display = 'flex';
         
-        console.log("Game Ready to Restart!");
+        console.log("Game Reset Complete!");
     }
 
     function updatePowerUpIndicator() {
@@ -831,12 +853,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleEnemyDefeat() {
         enemiesDefeated++;
+        updateScore(100); // Add 100 points for defeating an enemy
         console.log(`Enemies defeated: ${enemiesDefeated}`);
         
         if (enemiesDefeated >= 3 && !hasBubblePowerUp && !isBubbleActive) {
             console.log('Bubble shield power-up unlocked!');
             hasBubblePowerUp = true;
             enemiesDefeated = 0; // Reset counter
+            updateScore(500); // Bonus points for getting power-up
         }
         
         updatePowerUpIndicator();
